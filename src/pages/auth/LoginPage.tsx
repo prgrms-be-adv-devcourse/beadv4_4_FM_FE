@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi } from '../../api/auth';
-import { getRoleFromToken } from '../../utils/auth';
 
 const LoginPage = () => {
     const navigate = useNavigate();
@@ -19,23 +18,40 @@ const LoginPage = () => {
     }, [searchParams, setSearchParams]);
 
     const handleLogin = async () => {
+        if (email === 'admin' && password === 'admin') {
+            navigate('/admin/login');
+            return;
+        }
+
         try {
             const response = await authApi.login({ email, password });
-            if (response.resultCode.startsWith('S-200') || response.resultCode.startsWith('200')) {
-                localStorage.setItem('accessToken', response.data.accessToken);
+
+            // Support both wrapped `RsData` and flat response formats
+            const isSuccess = response.resultCode ? (response.resultCode.startsWith('S-200') || response.resultCode.startsWith('200')) : true;
+            const responseData = response.data || (response as any);
+            const token = responseData.accessToken || (response as any).accessToken;
+
+            if (isSuccess && token) {
+                localStorage.setItem('accessToken', token);
                 // refreshToken is now handled by HttpOnly cookie
-                if (response.data.nickname) {
-                    localStorage.setItem('nickname', response.data.nickname);
+                if (responseData.nickname) {
+                    localStorage.setItem('nickname', responseData.nickname);
+                }
+
+                const role = responseData.role || (response as any).role;
+                if (role) {
+                    localStorage.setItem('role', role);
                 }
 
                 // Redirect admin users to the admin dashboard
-                if (getRoleFromToken() === 'ROLE_ADMIN') {
+                const upperRole = role ? role.toUpperCase() : '';
+                if (upperRole === 'ADMIN' || upperRole === 'ROLE_ADMIN') {
                     navigate('/admin');
                 } else {
                     navigate('/');
                 }
             } else {
-                setError('로그인 실패: ' + response.msg);
+                setError('로그인 실패: ' + (response.msg || '토큰을 받지 못했습니다.'));
             }
         } catch (err: any) {
             console.error('Login error details:', err);

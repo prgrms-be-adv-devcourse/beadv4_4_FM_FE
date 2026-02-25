@@ -18,6 +18,9 @@ export const getUserIdFromToken = (): number | null => {
 };
 
 export const getRoleFromToken = (): string | null => {
+    const storedRole = localStorage.getItem('role');
+    if (storedRole) return storedRole;
+
     const token = localStorage.getItem('accessToken');
     if (!token) return null;
 

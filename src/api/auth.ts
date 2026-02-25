@@ -8,7 +8,9 @@ export interface LoginRequest {
 export interface LoginResponse {
     accessToken: string;
     refreshToken: string;
-    nickname?: string; // Optimistic addition
+    isNewUser?: boolean;
+    role?: string;
+    nickname?: string;
 }
 
 export interface RsData<T> {
@@ -32,6 +34,10 @@ export interface SignupRequest {
 export const authApi = {
     login: async (data: LoginRequest) => {
         const response = await client.post<RsData<LoginResponse>>('/auth/login', data);
+        return response.data;
+    },
+    adminLogin: async (data: LoginRequest) => {
+        const response = await client.post<RsData<LoginResponse>>('/admin/login', data);
         return response.data;
     },
     signup: async (data: SignupRequest, profileImage?: File | null) => {
