@@ -18,6 +18,7 @@ export interface OrderItemRequest {
 }
 
 export interface CreateOrderRequest {
+    buyerAddress?: string;
     totalPrice: number;
     paymentType: string;
     items: OrderItemRequest[];

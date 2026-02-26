@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { isTokenExpired } from '../utils/auth';
+import { jwtDecode } from 'jwt-decode';
 
 const client = axios.create({
     baseURL: '/api/v1',
@@ -8,21 +9,6 @@ const client = axios.create({
     },
     withCredentials: true,
 });
-
-// 간단한 JWT 디코드 헬퍼 함수
-// const parseJwt = (token: string) => {
-//     try {
-//         const base64Url = token.split('.')[1];
-//         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-//         const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
-//             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-//         }).join(''));
-
-//         return JSON.parse(jsonPayload);
-//     } catch (e) {
-//         return null;
-//     }
-// };
 
 // Request interceptor to add token and custom headers
 client.interceptors.request.use(
@@ -58,6 +44,19 @@ client.interceptors.request.use(
             // Ensure headers object exists and add Authorization
             config.headers = config.headers || {};
             config.headers['Authorization'] = `Bearer ${token.trim()}`;
+
+            try {
+                const payload: any = jwtDecode(token);
+                if (payload) {
+                    const userId = payload.userId || payload.id || payload.sub;
+                    if (userId) {
+                        config.headers['X-User-Id'] = userId.toString();
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to decode token for X-User-Id extraction", e);
+            }
+
             console.log(`[Auth] Header added to ${url}`);
         } else if (!isPublicRoute) {
             console.warn(`[Auth] Missing token for private route: ${url}. Blocking request.`);

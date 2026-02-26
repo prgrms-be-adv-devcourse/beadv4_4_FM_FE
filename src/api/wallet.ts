@@ -33,9 +33,9 @@ export const walletApi = {
         const response = await client.get<RsData<UserWalletResponseDto>>(`/cash/wallets/user`);
         return response.data;
     },
-    getWalletLogs: async () => {
+    getWalletLogs: async (page: number = 0, size: number = 10) => {
         // Updated path based on user code: @GetMapping("/user/wallet/logs")
-        const response = await client.get<RsData<UserCashLog[]>>(`/cash/wallets/user/wallet/logs`);
+        const response = await client.get<RsData<{ content: UserCashLog[], totalPages: number }>>(`/cash/wallets/user/wallet/logs?page=${page}&size=${size}`);
         return response.data;
     },
     // Charge Balance

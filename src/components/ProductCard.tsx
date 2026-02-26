@@ -8,6 +8,9 @@ interface ProductCardProps {
 }
 
 export const ProductCard = ({ product }: ProductCardProps) => {
+    // Check if thumbnail is a valid URL
+    const validThumbnail = product.thumbnail && product.thumbnail.startsWith('http') ? product.thumbnail : null;
+
     // Extended Interface for UI Demo (Badges)
     // In a real app, these would come from the backend `product.badges`
     const isEco = product.id % 2 === 0; // Mock logic
@@ -18,9 +21,9 @@ export const ProductCard = ({ product }: ProductCardProps) => {
     return (
         <div className="group block bg-white w-full max-w-[250px] flex flex-col relative transition-all duration-300">
             <Link to={`/market/${product.id}`} className="block relative aspect-[4/5] bg-[#F9F9F7] overflow-hidden rounded-[8px] mb-2">
-                {product.thumbnail ? (
+                {validThumbnail ? (
                     <img
-                        src={product.thumbnail}
+                        src={validThumbnail}
                         alt={product.name}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         onError={(e) => {
@@ -32,7 +35,8 @@ export const ProductCard = ({ product }: ProductCardProps) => {
                 ) : null}
 
                 {/* Fallback Image */}
-                <div className={`absolute inset-0 flex flex-col items-center justify-center text-slate-300 bg-[#F9F9F7] ${product.thumbnail ? 'hidden' : ''}`}>
+                <div className={`absolute inset-0 flex flex-col items-center justify-center text-slate-300 bg-[#F9F9F7] ${validThumbnail ? 'hidden' : ''}`}>
+                    <span className="text-4xl mb-2">🌿</span>
                     <span className="text-xs font-medium uppercase tracking-widest opacity-40">No Image</span>
                 </div>
 

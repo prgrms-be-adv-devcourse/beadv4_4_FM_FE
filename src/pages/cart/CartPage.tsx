@@ -62,12 +62,15 @@ const CartPage = () => {
         }
 
         // Backend Validation Guard: Check if any item is missing weight
+        // 무게 정보가 없어도 주문 진행할 수 있도록 유효성 검사 제거
+        /*
         const itemsWithMissingWeight = cart.items.filter(item => item.weight === undefined || item.weight === null);
         if (itemsWithMissingWeight.length > 0) {
             const productNames = itemsWithMissingWeight.map(i => i.productName).join(', ');
             alert(`다음 상품의 무게 정보가 없어 주문할 수 없습니다:\n${productNames}\n\n관리자에게 문의해주세요.`);
             return;
         }
+        */
 
         if (!window.confirm(type === 'TOSS' ? "주문하시겠습니까?" : "예치금으로 결제하시겠습니까?")) return;
 
@@ -88,6 +91,7 @@ const CartPage = () => {
             }));
 
             const orderRequest = {
+                buyerAddress: '기본 배송지',
                 totalPrice: requestTotalPrice,
                 paymentType: type === 'TOSS' ? "CARD" : "CASH",
                 items: orderItems
@@ -124,8 +128,13 @@ const CartPage = () => {
                     failUrl: `${window.location.origin}/payment/fail`,
                 });
             } else {
-                // Cash Payment - auto-processed during order creation
-                // No need to call confirmCashPayment API
+                // Cash Payment - process via confirm/cash API
+                const { paymentApi } = await import('../../api/payment');
+                await paymentApi.confirmCashPayment({
+                    orderId: orderNo,
+                    amount: totalPrice,
+                    payMethod: "CASH"
+                });
 
                 // Redirect to success page manually
                 navigate(`/payment/success?orderId=${uniqueOrderId}&amount=${totalPrice}&method=CASH&status=DONE`);

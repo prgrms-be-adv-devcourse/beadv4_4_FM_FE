@@ -40,15 +40,6 @@ const ProductDetailPage = () => {
         fetchProduct();
     }, [id]);
 
-    // 선택된 옵션 조합 문자열 생성 (예: "비스포크 스카이블루 / 기본 설치")
-    const selectedOptionString = useMemo(() => {
-        if (!product?.mainProduct?.optionGroups) return "";
-        return product.mainProduct.optionGroups
-            .map(group => selectedOptions[group.name])
-            .filter(Boolean)
-            .join(' / ');
-    }, [product, selectedOptions]);
-
     // 선택된 옵션에 일치하는 상품 아이템 찾기
     const selectedItem = useMemo<ProductItem | null>(() => {
         if (!product?.mainProduct?.productItems) return null;
@@ -65,10 +56,55 @@ const ProductDetailPage = () => {
             return null;
         }
 
-        return product.mainProduct.productItems.find(
-            item => item.optionCombination === selectedOptionString
-        ) || null;
-    }, [product, selectedOptionString, selectedOptions]);
+        const expectedValues = product.mainProduct.optionGroups
+            .map(group => selectedOptions[group.name])
+            .filter(Boolean);
+
+        if (expectedValues.length !== product.mainProduct.optionGroups.length) {
+            return null;
+        }
+
+        // 1. 완벽하게 일치하는 아이템 찾기 (순서 무관 매칭)
+        let bestMatch = product.mainProduct.productItems.find(item => {
+            if (!item.optionCombination) return false;
+            const itemTokens = item.optionCombination.split('/').map(v => v.trim());
+
+            if (itemTokens.length !== expectedValues.length) return false;
+
+            let tokensCopy = [...itemTokens];
+            for (const val of expectedValues) {
+                const idx = tokensCopy.indexOf(val.trim());
+                if (idx !== -1) {
+                    tokensCopy.splice(idx, 1);
+                } else {
+                    return false;
+                }
+            }
+            return tokensCopy.length === 0;
+        });
+
+        if (bestMatch) return bestMatch;
+
+        // 2. 관리자 DB 데이터 불일치(값 다름)를 대비한 부분 점수 기반 매칭 폴백
+        let maxScore = -1;
+
+        for (const item of product.mainProduct.productItems) {
+            if (!item.optionCombination) continue;
+            let score = 0;
+            const combinationLower = item.optionCombination.toLowerCase();
+            for (const val of expectedValues) {
+                if (combinationLower.includes(val.trim().toLowerCase())) {
+                    score++;
+                }
+            }
+            if (score > maxScore) {
+                maxScore = score;
+                bestMatch = item;
+            }
+        }
+
+        return bestMatch || product.mainProduct.productItems[0] || null;
+    }, [product, selectedOptions]);
 
     // 모든 옵션이 선택되었는지 확인
     const isAllOptionsSelected = useMemo(() => {
@@ -141,6 +177,7 @@ const ProductDetailPage = () => {
             }];
 
             const orderRequest = {
+                buyerAddress: '기본 배송지',
                 totalPrice: requestTotalPrice,
                 paymentType: type === 'TOSS' ? "CARD" : "CASH",
                 items: orderItems
@@ -168,6 +205,13 @@ const ProductDetailPage = () => {
                     failUrl: `${window.location.origin}/payment/fail`,
                 });
             } else {
+                const { paymentApi } = await import('../../api/payment');
+                await paymentApi.confirmCashPayment({
+                    orderId: orderNo,
+                    amount: requestTotalPrice,
+                    payMethod: "CASH"
+                });
+
                 window.location.href = `/payment/success?orderId=${uniqueOrderId}&amount=${requestTotalPrice}&method=CASH&status=DONE`;
             }
 

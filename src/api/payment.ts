@@ -43,10 +43,16 @@ export const paymentApi = {
         return response.data;
     },
 
-    // Check payment status by orderNo
-    getPaymentsByOrder: async (orderNo: string) => {
-        const response = await client.get<RsData<any>>(`/payments/orders/${orderNo}`);
-        return response.data.data?.content || response.data.data || [];
+    // Confirm cash payment
+    confirmCashPayment: async (request: { orderId: string; amount: number; payMethod: string }) => {
+        const response = await client.post<RsData<void>>('/payments/confirm/cash', request);
+        return response.data;
+    },
+
+    // Check payment status by orderNo with pagination
+    getPaymentsByOrder: async (orderNo: string, page: number = 0, size: number = 10) => {
+        const response = await client.get<any>(`/payments/orders/${orderNo}?page=${page}&size=${size}`);
+        return response.data?.data || null;
     },
 
     // Cancel payment (full or partial)

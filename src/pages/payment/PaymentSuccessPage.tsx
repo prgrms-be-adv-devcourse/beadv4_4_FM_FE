@@ -157,7 +157,7 @@ const PaymentSuccessPage = () => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>결제 방법</span>
-                    <strong>카드 결제</strong>
+                    <strong>{searchParams.get('method') === 'CASH' ? '예치금 결제' : '카드 결제'}</strong>
                 </div>
             </div>
             <button

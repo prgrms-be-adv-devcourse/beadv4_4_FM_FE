@@ -10,6 +10,7 @@ import { couponApi, type UserCouponResponse } from '../../../api/coupon';
 import { donationApi, type DonationSummaryResponse, type DonationMonthlyHistoryResponse } from '../../../api/donation';
 import { reviewApi, type WritableReviewResponse, type ReviewResponse } from '../../../api/review';
 import OrdersPage from '../../order/OrdersPage';
+import Pagination from '../../../components/Pagination';
 //import { WishlistTab } from './WishlistTab';
 
 type TabType = 'orders' | 'profile' | 'likes' | 'reviews' | 'wallet' | 'coupon' | 'donation';
@@ -28,6 +29,12 @@ const MyPage = () => {
     const [couponTotalPages, setCouponTotalPages] = useState<number>(0);
     const [donationSummary, setDonationSummary] = useState<DonationSummaryResponse | null>(null);
     const [donationHistory, setDonationHistory] = useState<DonationMonthlyHistoryResponse[]>([]);
+
+    // Wallet Logs state
+    const [walletLogs, setWalletLogs] = useState<any[]>([]);
+    const [walletLogPage, setWalletLogPage] = useState<number>(0);
+    const [walletLogTotalPages, setWalletLogTotalPages] = useState<number>(0);
+
     const [pendingReviews, setPendingReviews] = useState<WritableReviewResponse[]>([]);
     const [myReviews, setMyReviews] = useState<ReviewResponse[]>([]);
     const [myReviewPage, setMyReviewPage] = useState<number>(0);
@@ -120,7 +127,7 @@ const MyPage = () => {
             try {
                 const statusParam = couponStatusFilter === 'ALL' ? undefined : couponStatusFilter;
                 const typeParam = couponTypeFilter === 'ALL' ? undefined : couponTypeFilter;
-                const couponRes = await couponApi.getMyCoupons(couponPage, 10, statusParam, typeParam);
+                const couponRes = await couponApi.getMyCoupons(couponPage, 5, statusParam, typeParam);
                 if (couponRes && couponRes.data && couponRes.data.content) {
                     setCoupons(couponRes.data.content);
                     setCouponTotalPages(couponRes.data.totalPages);
@@ -159,6 +166,28 @@ const MyPage = () => {
         };
         fetchDonations();
     }, [walletInfo]);
+
+    // Fetch Wallet Logs
+    useEffect(() => {
+        if (!walletInfo || activeTab !== 'wallet') return;
+
+        const fetchWalletLogs = async () => {
+            try {
+                const logRes = await walletApi.getWalletLogs(walletLogPage, 5);
+                if (logRes && logRes.resultCode?.startsWith('200') || logRes?.resultCode?.startsWith('S-200')) {
+                    setWalletLogs(logRes.data.content || []);
+                    setWalletLogTotalPages(logRes.data.totalPages || 0);
+                } else {
+                    setWalletLogs([]);
+                    setWalletLogTotalPages(0);
+                }
+            } catch (err) {
+                console.error('Failed to fetch wallet logs:', err);
+            }
+        };
+
+        fetchWalletLogs();
+    }, [walletInfo, activeTab, walletLogPage]);
 
     // Fetch Reviews
     useEffect(() => {
@@ -306,12 +335,74 @@ const MyPage = () => {
         }
     };
 
+    const handleCharge = async () => {
+        const input = prompt('충전할 금액을 입력해주세요 (원):', '10000');
+        if (!input) return;
+        const amount = Number(input);
+        if (isNaN(amount) || amount <= 0) {
+            alert('올바른 금액을 입력해주세요.');
+            return;
+        }
+
+        try {
+            const res = await walletApi.chargeBalance(amount);
+            if (res.resultCode.startsWith('S-200') || res.resultCode.startsWith('200')) {
+                alert(`${amount.toLocaleString()}원이 충전되었습니다.`);
+                // Refresh balance and logs locally
+                const balanceRes = await walletApi.getBalance();
+                if (balanceRes && (balanceRes.resultCode.startsWith('S-200') || balanceRes.resultCode.startsWith('200'))) {
+                    setWalletInfo(prev => prev ? { ...prev, balance: balanceRes.data } : prev);
+                }
+                setWalletLogPage(0); // Go back to first page
+                const logRes = await walletApi.getWalletLogs(0, 10);
+                if (logRes && (logRes.resultCode.startsWith('200') || logRes.resultCode.startsWith('S-200'))) {
+                    setWalletLogs(logRes.data.content || []);
+                    setWalletLogTotalPages(logRes.data.totalPages || 0);
+                }
+            }
+        } catch (error: any) {
+            console.error('Charge failed:', error);
+            alert('충전에 실패했습니다: ' + (error.response?.data?.msg || error.message));
+        }
+    };
+
+    const handleWithdraw = async () => {
+        const input = prompt('출금할 금액을 입력해주세요 (원):', '10000');
+        if (!input) return;
+        const amount = Number(input);
+        if (isNaN(amount) || amount <= 0) {
+            alert('올바른 금액을 입력해주세요.');
+            return;
+        }
+
+        try {
+            const res = await walletApi.withdrawBalance(amount);
+            if (res.resultCode.startsWith('S-200') || res.resultCode.startsWith('200')) {
+                alert(`${amount.toLocaleString()}원이 출금되었습니다.`);
+                // Refresh balance and logs locally
+                const balanceRes = await walletApi.getBalance();
+                if (balanceRes && (balanceRes.resultCode.startsWith('S-200') || balanceRes.resultCode.startsWith('200'))) {
+                    setWalletInfo(prev => prev ? { ...prev, balance: balanceRes.data } : prev);
+                }
+                setWalletLogPage(0); // Go back to first page
+                const logRes = await walletApi.getWalletLogs(0, 10);
+                if (logRes && (logRes.resultCode.startsWith('200') || logRes.resultCode.startsWith('S-200'))) {
+                    setWalletLogs(logRes.data.content || []);
+                    setWalletLogTotalPages(logRes.data.totalPages || 0);
+                }
+            }
+        } catch (error: any) {
+            console.error('Withdraw failed:', error);
+            alert('출금에 실패했습니다: ' + (error.response?.data?.msg || error.message));
+        }
+    };
+
     const renderContent = () => {
         switch (activeTab) {
             case 'orders':
                 // App.tsx에서 사용하는 OrdersPage를 마이페이지 내부 탭에서도 렌더링
                 return (
-                    <div className="card" style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: 'none', borderRadius: '24px', minHeight: '600px' }}>
+                    <div style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: '1px solid #d1d5db', borderRadius: '24px', minHeight: '600px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                         <h3 style={{ fontSize: '1.25rem', margin: '0 0 1.5rem 0', fontWeight: 700, color: '#3B5240' }}>주문 내역</h3>
 
                         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2rem', alignItems: 'center' }}>
@@ -370,20 +461,20 @@ const MyPage = () => {
                 );
             case 'profile':
                 return (
-                    <div className="card" style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: 'none', borderRadius: '24px', minHeight: '600px' }}>
+                    <div style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: '1px solid #d1d5db', borderRadius: '24px', minHeight: '600px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                         <ProfileEditPage initialEmail={user.email} />
                     </div>
                 );
             case 'likes':
                 return (
-                    <div className="card" style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: 'none', borderRadius: '24px', minHeight: '600px' }}>
+                    <div style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: '1px solid #d1d5db', borderRadius: '24px', minHeight: '600px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                         <h3 style={{ fontSize: '1.25rem', margin: '0 0 1.5rem 0', fontWeight: 700, color: '#3B5240' }}>찜 한 상품</h3>
                         <div style={{ textAlign: 'center', padding: '4rem 0', color: '#64748b' }}>찜 한 상품이 없습니다.</div>
                     </div>
                 );
             case 'reviews':
                 return (
-                    <div className="card" style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: 'none', borderRadius: '24px', minHeight: '600px' }}>
+                    <div style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: '1px solid #d1d5db', borderRadius: '24px', minHeight: '600px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                         <h3 style={{ fontSize: '1.25rem', margin: '0 0 1.5rem 0', fontWeight: 700, color: '#3B5240' }}>내 리뷰 관리</h3>
 
                         {/* 작성 가능한 리뷰 (Pending) */}
@@ -450,27 +541,7 @@ const MyPage = () => {
                                     </ul>
 
                                     {/* Pagination (My Reviews) */}
-                                    {myReviewTotalPages > 1 && (
-                                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
-                                            <button
-                                                onClick={() => setMyReviewPage(p => Math.max(0, p - 1))}
-                                                disabled={myReviewPage === 0}
-                                                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: myReviewPage === 0 ? '#f8fafc' : '#ffffff', color: myReviewPage === 0 ? '#94a3b8' : '#1e293b', cursor: myReviewPage === 0 ? 'not-allowed' : 'pointer' }}
-                                            >
-                                                이전
-                                            </button>
-                                            <span style={{ color: '#475569', fontWeight: 500 }}>
-                                                {myReviewPage + 1} / {myReviewTotalPages}
-                                            </span>
-                                            <button
-                                                onClick={() => setMyReviewPage(p => Math.min(myReviewTotalPages - 1, p + 1))}
-                                                disabled={myReviewPage >= myReviewTotalPages - 1}
-                                                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: myReviewPage >= myReviewTotalPages - 1 ? '#f8fafc' : '#ffffff', color: myReviewPage >= myReviewTotalPages - 1 ? '#94a3b8' : '#1e293b', cursor: myReviewPage >= myReviewTotalPages - 1 ? 'not-allowed' : 'pointer' }}
-                                            >
-                                                다음
-                                            </button>
-                                        </div>
-                                    )}
+                                    <Pagination currentPage={myReviewPage} totalPages={myReviewTotalPages} onPageChange={setMyReviewPage} />
                                 </div>
                             )}
                         </div>
@@ -478,19 +549,56 @@ const MyPage = () => {
                 );
             case 'wallet':
                 return (
-                    <div className="card" style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: 'none', borderRadius: '24px', minHeight: '600px' }}>
+                    <div style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: '1px solid #d1d5db', borderRadius: '24px', minHeight: '600px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                         <h3 style={{ fontSize: '1.25rem', margin: '0 0 1.5rem 0', fontWeight: 700, color: '#3B5240' }}>예치금 관리</h3>
-                        <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--primary-color)', marginBottom: '1rem', textAlign: 'center', padding: '2rem 0' }}>
+                        <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--primary-color)', marginBottom: '1rem', textAlign: 'center', padding: '1rem 0 0 0' }}>
                             {balance.toLocaleString()}원
                         </div>
-                        <div style={{ textAlign: 'center' }}>
-                            <Link to="/wallet/history" className="btn btn-primary" style={{ padding: '0.8rem 2rem', borderRadius: '50px' }}>내역 상세 보기</Link>
+
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                            <button onClick={handleCharge} className="btn btn-primary" style={{ padding: '0.6rem 2rem', borderRadius: '8px', fontSize: '0.95rem' }}>충전하기</button>
+                            <button onClick={handleWithdraw} style={{ padding: '0.6rem 2rem', borderRadius: '8px', fontSize: '0.95rem', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', color: '#475569', cursor: 'pointer', fontWeight: 600 }}>출금하기</button>
+                        </div>
+
+                        <div style={{ marginTop: '2rem' }}>
+                            <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#334155', marginBottom: '1rem' }}>캐시 사용 내역</h4>
+                            {walletLogs.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '2rem 0', color: '#94a3b8', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.95rem' }}>내역이 없습니다.</div>
+                            ) : (
+                                <div>
+                                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        {walletLogs.map((log) => (
+                                            <li key={log.id} style={{ padding: '1.25rem', borderRadius: '8px', border: '1px solid #d1d5db', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+                                                        {new Date(log.createdAt).toLocaleString()}
+                                                    </div>
+                                                    <div style={{ fontSize: '1.05rem', fontWeight: 600, color: '#1e293b' }}>
+                                                        {log.eventType.replace(/__/g, ' ')}
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: log.amount > 0 ? 'var(--primary-color)' : '#ef4444' }}>
+                                                        {log.amount > 0 ? '+' : ''}{log.amount.toLocaleString()}원
+                                                    </div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                                        잔액: {log.balance.toLocaleString()}원
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+
+                                    {/* Pagination (Wallet Logs) */}
+                                    <Pagination currentPage={walletLogPage} totalPages={walletLogTotalPages} onPageChange={setWalletLogPage} />
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
             case 'donation':
                 return (
-                    <div className="card" style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: 'none', borderRadius: '24px', minHeight: '600px' }}>
+                    <div style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: '1px solid #d1d5db', borderRadius: '24px', minHeight: '600px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                         <h3 style={{ fontSize: '1.25rem', margin: '0 0 1.5rem 0', fontWeight: 700, color: '#3B5240' }}>나의 기부 내역</h3>
 
                         {donationSummary && (
@@ -556,7 +664,7 @@ const MyPage = () => {
                 );
             case 'coupon':
                 return (
-                    <div className="card" style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: 'none', borderRadius: '24px', minHeight: '600px' }}>
+                    <div style={{ padding: '2.5rem 2rem', backgroundColor: '#F8FAF8', border: '1px solid #d1d5db', borderRadius: '24px', minHeight: '600px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                         <h3 style={{ fontSize: '1.25rem', margin: '0 0 1.5rem 0', fontWeight: 700, color: '#3B5240' }}>보유 쿠폰</h3>
 
                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem' }}>
@@ -589,7 +697,7 @@ const MyPage = () => {
                             <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem', margin: '0 -0.5rem', padding: '0 0.5rem' }}>
                                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '0.5rem' }}>
                                     {coupons.map((coupon) => (
-                                        <li key={coupon.userCouponId} style={{ padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <li key={coupon.userCouponId} style={{ padding: '1.5rem', borderRadius: '12px', border: '1px solid #d1d5db', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                                             <div>
                                                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.5rem' }}>
                                                     {coupon.couponName}
@@ -620,27 +728,7 @@ const MyPage = () => {
                         )}
 
                         {/* Pagination Controls */}
-                        {couponTotalPages > 1 && (
-                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
-                                <button
-                                    onClick={() => setCouponPage(p => Math.max(0, p - 1))}
-                                    disabled={couponPage === 0}
-                                    style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: couponPage === 0 ? '#f8fafc' : '#ffffff', color: couponPage === 0 ? '#94a3b8' : '#1e293b', cursor: couponPage === 0 ? 'not-allowed' : 'pointer' }}
-                                >
-                                    이전
-                                </button>
-                                <span style={{ color: '#475569', fontWeight: 500 }}>
-                                    {couponPage + 1} / {couponTotalPages}
-                                </span>
-                                <button
-                                    onClick={() => setCouponPage(p => Math.min(couponTotalPages - 1, p + 1))}
-                                    disabled={couponPage >= couponTotalPages - 1}
-                                    style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: couponPage >= couponTotalPages - 1 ? '#f8fafc' : '#ffffff', color: couponPage >= couponTotalPages - 1 ? '#94a3b8' : '#1e293b', cursor: couponPage >= couponTotalPages - 1 ? 'not-allowed' : 'pointer' }}
-                                >
-                                    다음
-                                </button>
-                            </div>
-                        )}
+                        <Pagination currentPage={couponPage} totalPages={couponTotalPages} onPageChange={setCouponPage} />
                     </div>
                 );
             default:
