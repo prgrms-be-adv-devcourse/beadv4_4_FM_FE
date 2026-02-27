@@ -1,0 +1,86 @@
+name: Build and Deploy Frontend to EC2 Kubernetes
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}/beadv4_4_fm_fe
+  EC2_INSTANCE_TAG_NAME: team07 # 대상 EC2 인스턴스 태그명
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Get EC2 Instance ID
+        id: get_instance_id
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ env.EC2_INSTANCE_TAG_NAME }}" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          echo "INSTANCE_ID=${INSTANCE_ID}" >> "${GITHUB_ENV}"
+
+      - name: Deploy to Kubernetes via SSM
+        run: |
+          cat > /tmp/ssm-commands.json << EOF
+          {
+            "commands": [
+              "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml",
+              "kubectl create namespace mossy || true",
+              "cd /tmp",
+              "rm -rf beadv4_4_fm_fe",
+              "git clone https://github.com/${{ github.repository }}.git beadv4_4_fm_fe",
+              "cd beadv4_4_fm_fe",
+              "kubectl apply -f k8s/frontend.yaml",
+              "kubectl rollout restart deployment frontend-service -n mossy"
+            ]
+          }
+          EOF
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${INSTANCE_ID}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters file:///tmp/ssm-commands.json \
+            --query "Command.CommandId" \
+            --output text)
+
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "${INSTANCE_ID}" || true
