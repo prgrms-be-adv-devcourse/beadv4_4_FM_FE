@@ -17,7 +17,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: frontend-service
-          image: ghcr.io/ddubuk228/beadv4_4_fm_fe:latest
+          image: ghcr.io/prgrms-be-adv-devcourse/beadv4_4_fm_fe:latest
           ports:
             - containerPort: 80
           imagePullPolicy: Always 

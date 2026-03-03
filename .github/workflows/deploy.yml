@@ -7,6 +7,10 @@ on:
     paths-ignore:
       - 'README.md'
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}/beadv4_4_fm_fe
   EC2_INSTANCE_TAG_NAME: team07 # 대상 EC2 인스턴스 태그명

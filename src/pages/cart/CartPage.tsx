@@ -74,14 +74,14 @@ const CartPage = () => {
         try {
 
             // Calculate total price
-            const requestTotalPrice = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const requestTotalPrice = cart.items.reduce((sum, item) => sum + (item.totalPrice * item.quantity), 0);
 
             const orderItems = cart.items.map(item => ({
                 productId: item.productId,
                 sellerId: item.sellerId,
                 productName: item.productName,
                 categoryName: item.categoryName || "",
-                price: item.price,
+                price: item.totalPrice,
                 weight: item.weight || 0,
                 thumbnailUrl: item.thumbnailUrl || "",
                 quantity: item.quantity
